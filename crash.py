@@ -25,7 +25,6 @@ def get_h_index(x, level=7):
 
 
 # Part 1: Set up env and load events data ---------------------------------------------------------------
-openai.api_key = "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"
 mapbox_url = 'https://api.mapbox.com/styles/v1/jbcollins4/cl6zj8j8n001014r7trqm8ha3/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiamJjb2xsaW5zNCIsImEiOiJjbDZ6YmdrNncwMnNyM3ZyMTF1dHFnbmVyIn0.-cj_dcJBa9nyKmRXnmRbuA'
 geolocator = Nominatim(user_agent="geo_mapper")
 api = overpy.Overpass()
@@ -42,7 +41,9 @@ If contain_street_information = False, street_name = ''.
 if user did not provide valid city and state information, set "full_address" = street_name. 
 * does the description contain information about the direction that the driver is travelling? If so, then contain_travel_direction=True, otherwise False.
 * if contain_travel_direction = True, what direction is it? Store the name in variable "travel_direction". If contain_travel_direction = False, travel_direction = ''. 
-* what is the severity level of the crash? Categorize it as "low-severity", "mid-severity", and "high-severity". Store the information in variable "severity". Store the confidence of the categorization in variable "severity_confidence", which should be between 0 and 1. 
+* what is the severity level of the crash? Categorize it as "low-severity", "mid-severity", and "high-severity". Store the information in variable "severity". 
+Store the confidence of the categorization in variable "severity_confidence", which should be between 0 and 1. 
+Provide reasoning for this severity estimate and store the content in another variable "severity_reasoning". 
 * did the trip end in a sudden stop or did the driver continue to drive and pull over somewhere else? Store the information in variable "crash_scene_end_type", and give it either value "sudden_stop", or "trip_continues". 
 
 Other relevant background information: 
@@ -57,6 +58,7 @@ The output should be in the format
 'full_address': full_address,
 'severity_level': severity,
 'severity_confidence': severity_confidence,
+'severity_reasoning': severity_reasoning, 
 'travel_direction': travel_direction,
 'crash_scene_end_type': sudden_stop or trip_continues}
 """
@@ -71,7 +73,7 @@ st.write("Please provide the claim description that you want me to help label. I
 
 # Define the layout of the app
 col1, col2 = st.columns([1, 1])
-client = OpenAI(api_key="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")
+client = OpenAI(api_key="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")
 
 with col1:
     user_chat = st.text_area("What can I help you label? :thinking_face:")
@@ -91,12 +93,29 @@ with col1:
             # Display the coordindate of the address
             if result_dict['contain_street_information'] and location:
                 st.write(
-                    f"From the description, I have identified that the crash happened on this street: {result_dict['full_address']} \n "
-                    # f"The latitude and longitude of the road is ({location.latitude}, {location.longitude})"
+                    f"From the description, I have identified that the crash happened on this street: **{result_dict['full_address']}** \n "
+                )
+                # st.write(
+                #     f"The latitude and longitude of the road is **({location.latitude}, {location.longitude})**."
+                #     )
+                if result_dict['travel_direction']:
+                    st.write(f"Before the crash happened, the driver was traveling in this direction: **{result_dict['travel_direction']}**."
                     )
+                st.write(
+                    f"The crash incident can be categorized as **{result_dict['severity_level']}** with {int(result_dict['severity_confidence']*100)}% confidence."
+                )
+                st.write('The reasoning for this categorization is as follow: ')
+                st.write('\t', result_dict['severity_reasoning'])
+
+                if result_dict['crash_scene_end_type'] == 'trip_continues':
+                    st.write(
+                        f"After the crash, the driver did not come to a sudden stop but continued to drive."
+                    )
+                else:
+                    st.write("After the crash, the drive came to a sudden stop and did not continue to drive. ")
             elif result_dict['contain_street_information']  and not location:
                 st.write(
-                    f"From the description, I have identified that the crash happened on this road: {result_dict['full_address']} \n "
+                    f"From the description, I have identified that the crash happened on this road: **{result_dict['full_address']}** \n "
                     f"However, I cannot locate this road in the OSM dataset"
                     )
             elif not result_dict['contain_street_information']:
