@@ -9,6 +9,8 @@ import numpy as np
 from scipy.spatial import ConvexHull
 import folium
 import h3
+import json
+from openai import OpenAI
 
 
 # Part 0: Util functions -------------------------------------------------------------------------------
@@ -22,12 +24,11 @@ def get_h_index(x, level=7):
     return None
 
 # Part 1: Set up env and load events data ---------------------------------------------------------------
-openai.api_key = "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"
+client = OpenAI(api_key=OPENAI_API_KEY)
 mapbox_url = 'https://api.mapbox.com/styles/v1/jbcollins4/cl6zj8j8n001014r7trqm8ha3/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiamJjb2xsaW5zNCIsImEiOiJjbDZ6YmdrNncwMnNyM3ZyMTF1dHFnbmVyIn0.-cj_dcJBa9nyKmRXnmRbuA'
 geolocator = Nominatim(user_agent="geo_mapper")
 api = overpy.Overpass()
-
-df_events = pd.read_parquet("/Users/fguo/cmt/ChatGeoPT/events_data/us_prod_events_hindex.parquet")
+df_events = pd.read_parquet("/Users/rchen/cmt/ChatGeoPT/events_data/us_prod_events_hindex.parquet")
 
 # Part 2: Prompt ----------------------------------------------------------------------------------------
 CHAT_TEMPLATE = """Assistant gets the address and task from the user's question. 
@@ -40,32 +41,27 @@ CHAT_TEMPLATE = """Assistant gets the address and task from the user's question.
 # Part 3: Strealint app and excecuted code 
 # Set the app title and description
 st.set_page_config(layout="wide", page_title="OSM Overpass Query App", page_icon=":earth_africa:")
-st.title(":cat: OSM Risk Expert :cat:")
-st.write("Hello! :wave: I'm Henry, your personalized driving assistant and osm expert!" 
-         "Feel free to ask questions about the road safety around your neighborhood. I'll generate a map to show the safety levels."
-         "If you are a technical person, feel free to ask for the osm way id and node id given an address.")
-
+st.title(":cat: CMT Road Risk Expert :cat:")
+st.write("Hello! :wave: I'm Henry again, this time as an expert for road safety! \n")
+st.write("Feel free to ask questions about the road safety around your neighborhood. I'll generate a map to show the safety levels. \n")
+st.write("If you are a technical person, feel free to ask for the osm way id and node id given an address. \n")
+st.write(" ")
 # Define the layout of the app
 col1, col2 = st.columns([1, 1])
 with col1:
-    user_chat = st.text_area("What can I help you find? :thinking_face:")
+    user_chat = st.text_area("What location are you interested? :nerd_face:")
 
     if st.button("Ask"):
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "system", "content": CHAT_TEMPLATE},
-                    {'role': 'user', 'content': user_chat}],
-            max_tokens=1024,
-            n=1,
-            temperature=0.5,
-            top_p=1,
-            frequency_penalty=0.0,
-            presence_penalty=0.6,
-        )
+        response = client.chat.completions.create(model="gpt-3.5-turbo",  # model="gpt-4-turbo-preview",
+                                                  messages=[{"role": "system", "content": CHAT_TEMPLATE},
+                                                            {'role': 'user', 'content': user_chat}], max_tokens=1024,
+                                                  n=1, temperature=0.5, top_p=1, frequency_penalty=0.0,
+                                                  presence_penalty=0.6, )
+        response_dict = json.loads(response.model_dump_json())
 
-        chatout = eval(response['choices'][0]['message']['content'])
+        chatout = eval(response_dict['choices'][0]['message']['content'])
         # For debugging
-        # st.write(response['choices'][0]['message']['content'])
+        # st.write(response_dict['choices'][0]['message']['content'])
         location = geolocator.geocode(chatout['Address'])
         
         if location: 
@@ -178,65 +174,3 @@ with col1:
         else: 
             st.write("No results found in OSM :cry:")
         
-        
-         
-
-
-
-            # # Update the history string
-            # st.session_state.chat_history = st.session_state.chat_history + f"Human: {chat}\nAssistant: {response['choices'][0]['text']}\n"
-
-            # # Update the prompt history string
-            # st.session_state.prompt_history = st.session_state.prompt_history + f"{chat} "
-
-            # # Update the Overpass query. The query is enclosed by three backticks, denoting that is a code block.
-            # # does the response contain a query? If so, update the query
-            # if "```" in response["choices"][0]["text"]:
-            #     st.session_state.overpass_query = response["choices"][0]["text"].split("```")[1]
-            # else:
-            #     st.session_state.overpass_query = None
-
-            # # Define the query button in the left pane
-            # with col2:
-
-            #     if st.session_state.overpass_query:
-            #         # Query the Overpass API
-            #         response = query_overpass(st.session_state.overpass_query)
-
-            #         # Check if the response is valid
-            #         if "elements" in response and len(response["elements"]) > 0:
-            #             # Create a new Folium map in the right pane
-            #             m = folium.Map(location=[response["elements"][0]["lat"], response["elements"][0]["lon"]], zoom_start=11)
-
-            #             # Add markers for each element in the response
-            #             for element in response["elements"]:
-            #                 if "lat" in element and "lon" in element:
-            #                     folium.Marker([element["lat"], element["lon"]]).add_to(m)
-
-            #             # Display the map
-            #             streamlit_folium.folium_static(m)
-
-            #             # If the request for summary of the API response is shorter than 1500 tokens,
-            #             # use the Reader model to generate a response
-
-            #             query_reader_prompt  = READER_TEMPLATE.format(prompt=st.session_state.prompt_history,
-            #                                                           response=str(response))
-            #             query_reader_prompt_tokens = len(ENC.encode(query_reader_prompt))
-            #             if query_reader_prompt_tokens < 1500:
-
-            #                 response = openai.Completion.create(
-            #                     model="text-davinci-003",
-            #                     prompt=query_reader_prompt,
-            #                     temperature=0.5,
-            #                     max_tokens=2047 - query_reader_prompt_tokens,
-            #                     top_p=1,
-            #                     frequency_penalty=0,
-            #                     presence_penalty=0
-            #                 )
-
-            #                 # Display the response as pure text
-            #                 st.write(response["choices"][0]["text"])
-            #             else:
-            #                 st.write("The API response is too long for me to read. Try asking for something slightly more specific! :smile:")
-            #         else:
-            #             st.write("No results found :cry:")

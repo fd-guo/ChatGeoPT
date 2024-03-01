@@ -8,7 +8,6 @@ import json
 
 import pandas as pd
 import numpy as np
-from scipy.spatial import ConvexHull
 import folium
 import h3
 
@@ -25,6 +24,7 @@ def get_h_index(x, level=7):
 
 
 # Part 1: Set up env and load events data ---------------------------------------------------------------
+client = OpenAI(api_key=OPENAI_API_KEY)
 mapbox_url = 'https://api.mapbox.com/styles/v1/jbcollins4/cl6zj8j8n001014r7trqm8ha3/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiamJjb2xsaW5zNCIsImEiOiJjbDZ6YmdrNncwMnNyM3ZyMTF1dHFnbmVyIn0.-cj_dcJBa9nyKmRXnmRbuA'
 geolocator = Nominatim(user_agent="geo_mapper")
 api = overpy.Overpass()
@@ -67,16 +67,15 @@ The output should be in the format
 # Set the app title and description
 st.set_page_config(layout="wide", page_title="OSM Overpass Query App", page_icon=":earth_africa:")
 st.title(":cat: CMT Crash Claim Labeller :cat:")
-st.write("Hello! :wave: This is Henry again, this time as a crash claim labeller!")
-st.write("Please provide the claim description that you want me to help label. I'll generate a map with the matched trip that I have found for you to verify. "
-         )
-
+st.write("Hello! :wave: This is Henry, a crash claim labeller!")
+st.write("Please provide the claim description that you want me to help label.")
+st.write("I'll generate a map with the matched trip that I have found for you to verify.")
+st.write(" ")
 # Define the layout of the app
 col1, col2 = st.columns([1, 1])
-client = OpenAI(api_key="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")
 
 with col1:
-    user_chat = st.text_area("What can I help you label? :thinking_face:")
+    user_chat = st.text_area("What can I help you label? :nerd_face:")
 
     if st.button("Ask"):
         response = client.chat.completions.create(model="gpt-3.5-turbo", # model="gpt-4-turbo-preview",
@@ -93,53 +92,82 @@ with col1:
             # Display the coordindate of the address
             if result_dict['contain_street_information'] and location:
                 st.write(
-                    f"From the description, I have identified that the crash happened on this street: **{result_dict['full_address']}** \n "
+                    f":collision: From the description, I have identified that the crash happened on this street: **{result_dict['full_address']}** \n "
                 )
-                # st.write(
-                #     f"The latitude and longitude of the road is **({location.latitude}, {location.longitude})**."
-                #     )
                 if result_dict['travel_direction']:
-                    st.write(f"Before the crash happened, the driver was traveling in this direction: **{result_dict['travel_direction']}**."
+                    st.write(f":car: Before the crash happened, the driver was traveling in this direction: **{result_dict['travel_direction']}**."
                     )
                 st.write(
-                    f"The crash incident can be categorized as **{result_dict['severity_level']}** with {int(result_dict['severity_confidence']*100)}% confidence."
+                    f":exclamation: The crash incident can be categorized as **{result_dict['severity_level']}** with {int(result_dict['severity_confidence']*100)}% confidence."
                 )
-                st.write('The reasoning for this categorization is as follow: ')
+                st.write(':sparkles: The reasoning for this categorization is as follow: ')
                 st.write('\t', result_dict['severity_reasoning'])
 
                 if result_dict['crash_scene_end_type'] == 'trip_continues':
                     st.write(
-                        f"After the crash, the driver did not come to a sudden stop but continued to drive."
+                        f":octagonal_sign: After the crash, the driver did not come to a sudden stop but continued to drive."
                     )
                 else:
-                    st.write("After the crash, the drive came to a sudden stop and did not continue to drive. ")
+                    st.write(":octagonal_sign: After the crash, the drive came to a sudden stop and did not continue to drive. ")
             elif result_dict['contain_street_information']  and not location:
                 st.write(
-                    f"From the description, I have identified that the crash happened on this road: **{result_dict['full_address']}** \n "
-                    f"However, I cannot locate this road in the OSM dataset"
+                    f":collision: From the description, I have identified that the crash happened on this road: **{result_dict['full_address']}** \n "
+                    f":cry: However, I cannot locate this road in the OSM dataset"
                     )
             elif not result_dict['contain_street_information']:
                 st.write(
-                    f"From the description, I cannot identify any information about the street on which the crash happened. :cry:"
+                    f":cry: From the description, I cannot identify any information about the street on which the crash happened."
                 )
-            
-            crash_ad = pd.read_csv("/Users/fguo/cmt/ChatGeoPT/crash/crash_ad.csv")
+
+            # crash_ad, and highway_441 are obtained in Databricks
+            # Notebook: (20240229_Claim_labeller) https://cmt-cmt-statefarm-data-science-prd.cloud.databricks.com/?o=1571324165501902#notebook/154780448962512/command/154780448962513
+            crash_ad = pd.read_csv("crash/crash_ad.csv")
             crash_ad.rename(columns={'mm_lat': 'lat', 'mm_lon': 'lon'}, inplace=True)
             crash_ad['h3_12'] =  crash_ad.apply(lambda x: get_h_index(x, level=10), axis=1)
-            highway = pd.read_csv("/Users/fguo/cmt/ChatGeoPT/crash/highway_441.csv")
+            highway = pd.read_csv("crash/highway_441.csv")
             highway['h3_12'] =  highway.apply(lambda x: get_h_index(x, level=10), axis=1)
             highway.sort_values(by='lat', inplace=True)
-            st.write(f"The START latitude and longitude of the road is ({highway.lat.iloc[0]}, {highway.lon.iloc[0]})")
-            st.write(f"The END latitude and longitude of the road is ({highway.lat.iloc[-1]}, {highway.lon.iloc[-1]})")
+            st.write(f":palm_tree: The START latitude and longitude of the road is ({highway.lat.iloc[0]}, {highway.lon.iloc[0]})")
+            st.write(f":palm_tree: The END latitude and longitude of the road is ({highway.lat.iloc[-1]}, {highway.lon.iloc[-1]})")
+
+            st.markdown("""---""")
+
+            st.write(f":smile_cat: :smiley_cat: :heart_eyes_cat: Found one potential crash trip with driveid = **FABC98FE-C422-4D5B-91CA-AEB733813909**"
+            )
+            st.write(
+                f":clock1: The reported loss date is **2023-01-30 19:00:00**"
+            )
+            st.write(f":clock1: The matched trip ended at **2023-01-30 20:32:51**")
             
             # map plotting 
             with col2: 
                 way_h3_12 = set(highway.h3_12)
                 crash_ad['is_highway'] = crash_ad.apply(lambda x: x['h3_12'] in way_h3_12, axis=1)
                 mean_latlon = crash_ad[['lat', 'lon']].values.mean(axis=0).tolist()
-                m = folium.Map(location=mean_latlon, zoom_start=14, tiles=mapbox_url, attr='JBC', width=600, height=600)
+                m = folium.Map(location=mean_latlon, zoom_start=13, tiles=mapbox_url, attr='JBC', width=600, height=600)
                 for i in range(crash_ad.shape[0]): 
                     marker_color = 'red' if crash_ad.is_highway.iloc[i] else 'blue'
                     folium.Circle(location=[crash_ad.lat.iloc[i], crash_ad.lon.iloc[i]], radius=2, color=marker_color, 
                             fill=True, fill_color=marker_color, tiles=mapbox_url, attr='JBC').add_to(m)
                 streamlit_folium.folium_static(m)
+
+                def verify(flag):
+                    if flag:
+                        st.write('Saved this trip-claim pair as an auto-matched record.')
+                    else:
+                        st.write('Moved this claim to the manual-labeling pipeline.')
+
+                m = st.markdown("""
+                <style>
+                div.stButton > button:first-child {
+                    background-color: #0099ff;
+                    color:#ffffff;
+                }
+                div.stButton > button:hover {
+                    background-color: #00ff00;
+                    color:#ff0000;
+                    }
+                </style>""", unsafe_allow_html=True
+                                )
+                st.button("Looks like a good match")
+                st.button("Does not look like a match")
